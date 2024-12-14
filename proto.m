@@ -54,10 +54,28 @@
 
 %Project Step 1: - Problem Setup
     %a.) Express the non-linear system in continous time SS form.
-    
-
+        syms x(t) y(t) z(t) x_s(t) y_s(t) z_s(t) t mu delta_t
+        X_bar = [x(t),y(t),z(t),diff(x,t),diff(y,t),diff(z,t)];
+        r_mag = sqrt(x^2+y^2+z^2);
+        x_ddot = -mu*x/r_mag^3;
+        y_ddot = -mu*y/r_mag^3;
+        z_ddot = -mu*z/r_mag^3;
+        f = [diff(x,t),diff(y,t),diff(z,t),x_ddot,y_ddot,z_ddot];
+        rho = sqrt((x-x_s)^2+(y-y_s)^2+(z-z_s)^2);
+        rho_dot = diff(rho,t);
+        h = [rho, rho_dot];
+    %b.) Convert to discrete time form.
+        A = jacobian(f,X_bar);
+        C = jacobian(h,X_bar);
+        F = eye(6,6)+delta_t*A;
+        H = C; %Does not need to be discretized.
+    %c.) Modify to include stochasticity.
+        VarRho = 10^-6; %km^2
+        VarRhoDot = 10^-10; %km^2/s^2
+        Q_0 = zeros(6,6); %Assuming No Process Noise...
+        R_0 = [VarRho,0;0,VarRhoDot]./delta_t;
 %Project Addendum: Helper Functions
-%%
+
 function drdt = propagate_2BP(t,r) %Orbital Dynamics Diff-EQ Function
     mu = 398600.4418; %km^3/s^2 - Earth Gravitational Parameter.
     drdt = zeros(6, 1);
