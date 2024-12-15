@@ -68,14 +68,326 @@
     xlabel("Time (s)")
     ylabel("Range Rate (km/s)")
 
-    delta_t_var = 7;
-    x_0 = [r_nom;v_nom];
-    X_site = [R_site(1,:)';R_dot_site(1,:)'];
-    [y,H] = measurement_function(x_0,X_site);
-    [X_out,F] = propagate_state(x_0,delta_t_var,mu);
+%EKF (Pure Prediction) Implementation:
+    %Initialize
+    VarRng = 10^-6; %Range Variance - km^2
+    VarRngRate = 10^-10; %Range Rate Variance - km^2/s^2
+    x_kplus = [r_nom;v_nom]; %x_kplus = x_0;
+    Q_k = zeros(6,6); %Define Q_0
+    R_k = [VarRng,0;VarRngRate,0]; %Define R_0
+    P_kplus = [eye(3,3)*VarRng,zeros(3,3);zeros(3,3),eye(3,3)*VarRngRate]; %Define P_0;
+    %Create Storage
+    state_pure = zeros(size(data,1),12); %Formatted [X,Y,Z,X',Y',Z',3sigmaX,3sigmaY,3sigmaZ,3sigmaX',3sigmaY',3sigmaZ']
+    for k = 1:size(data,1)
+        %Find Delta_T
+        if(k ~= size(data,1))
+            delta_t = data(k+1,1)-data(k,1);
+            %Predict
+            [x_kplus_minus,F_k] = propagate_state(x_kplus,delta_t,mu);
+            P_kplus_minus = F_k*P_kplus*F_k'+Q_k;
+            P_kplus = P_kplus_minus;
+            x_kplus = x_kplus_minus;
+            %Store
+            state_pure(k,(1:6)) = x_kplus;
+            ThreeSigmaX = sqrt(P_kplus(1,1))*3;
+            ThreeSigmaY = sqrt(P_kplus(2,2))*3;
+            ThreeSigmaZ = sqrt(P_kplus(3,3))*3;
+            ThreeSigmaXDot = sqrt(P_kplus(4,4))*3;
+            ThreeSigmaYDot = sqrt(P_kplus(5,5))*3;
+            ThreeSigmaZDot = sqrt(P_kplus(6,6))*3;
+            state_pure(k,7:12) = [ThreeSigmaX,ThreeSigmaY,ThreeSigmaZ,ThreeSigmaXDot,ThreeSigmaYDot,ThreeSigmaZDot];
+            %Correct
+                %Not Implemented Here
+            %Store
+                %Not Implemented Here
+        end
+    end
+    %Plot 3D Trace
+        figure()
+        hold on
+        axis equal
+        scatter3(state_pure(:,1),state_pure(:,2),state_pure(:,3))
+        plot3(soln_prop_nom(:,1),soln_prop_nom(:,2),soln_prop_nom(:,3),LineWidth=2)
+        legend(["Pure Prediction","Nominal Trajectory Propagation"])
+        title("3D Plot of Pure Prediction Orbit.")
+        xlabel("X [km]")
+        ylabel("Y [km]")
+        zlabel("Z [km]")
+        grid on
+    %Plot 3 Sigma Stuff
+        X = (1:size(state_pure,1));
+        figure()
+        sgtitle("Pure Prediction 3-Sigma Bounds")
+        subplot(3,2,1)
+        hold on
+        plot(X,state_pure(:,7),"Color","blue")
+        plot(X,-state_pure(:,7),"Color","blue")
+        grid on
+        ylabel("X Error Bounds [km]")
+        subplot(3,2,3)
+        hold on
+        plot(X,state_pure(:,8),"Color","blue")
+        plot(X,-state_pure(:,8),"Color","blue")
+        grid on
+        ylabel("Y Error Bounds [km]")
+        subplot(3,2,5)
+        hold on
+        plot(X,state_pure(:,9),"Color","blue")
+        plot(X,-state_pure(:,9),"Color","blue")
+        grid on
+        ylabel("Z Error Bounds [km]")
+        subplot(3,2,2)
+        hold on
+        plot(X,state_pure(:,10),"Color","blue")
+        plot(X,-state_pure(:,10),"Color","blue")
+        grid on
+        ylabel("X' Error Bounds [km/s]")
+        subplot(3,2,4)
+        hold on
+        plot(X,state_pure(:,11),"Color","blue")
+        plot(X,-state_pure(:,11),"Color","blue")
+        grid on
+        ylabel("Y' Error Bounds [km/s]")
+        subplot(3,2,6)
+        hold on
+        plot(X,state_pure(:,12),"Color","blue")
+        plot(X,-state_pure(:,12),"Color","blue")
+        grid on
+        ylabel("Z' Error Bounds [km/s]")
 
-%EKF Implementation:
-
+%EKF (Corrected Prediction) Implementation:
+    %Initialize
+    VarRng = 10^-6; %Range Variance - km^2
+    VarRngRate = 10^-10; %Range Rate Variance - km^2/s^2
+    x_kplus = [r_nom;v_nom]; %x_kplus = x_0;
+    Q_k = zeros(6,6); %Define Q_0
+    R_k = [VarRng,0;VarRngRate,0]; %Define R_0
+    P_kplus = [eye(3,3)*VarRng,zeros(3,3);zeros(3,3),eye(3,3)*VarRngRate]; %Define P_0;
+    %Create Storage
+    state_corrected = zeros(size(data,1),14); %Same format as before but the last two columns are for range and range rate residuals respectively.
+    for k = 1:size(data,1)
+        %Find Delta_T
+        if(k ~= size(data,1))
+            delta_t = data(k+1,1)-data(k,1);
+            %Predict
+            [x_kplus_minus,F_k] = propagate_state(x_kplus,delta_t,mu);
+            P_kplus_minus = F_k*P_kplus*F_k'+Q_k;
+            %Correct
+            y_k_meas = data(k,(3:4))';
+            X_site = [R_site(k,:)';R_dot_site(k,:)'];
+            [y_k_pred,H] = measurement_function(x_kplus_minus,X_site);
+            delY = y_k_meas-y_k_pred;
+            K_k = P_kplus_minus*H'*pinv(H*P_kplus_minus*H'+R_k);
+            x_kplus = x_kplus_minus + K_k*delY;
+            P_kplus = (eye(6,6)-K_k*H)*P_kplus_minus;
+            %Store
+            state_corrected(k,(1:6)) = x_kplus;
+            ThreeSigmaX = sqrt(P_kplus(1,1))*3;
+            ThreeSigmaY = sqrt(P_kplus(2,2))*3;
+            ThreeSigmaZ = sqrt(P_kplus(3,3))*3;
+            ThreeSigmaXDot = sqrt(P_kplus(4,4))*3;
+            ThreeSigmaYDot = sqrt(P_kplus(5,5))*3;
+            ThreeSigmaZDot = sqrt(P_kplus(6,6))*3;
+            state_corrected(k,7:12) = [ThreeSigmaX,ThreeSigmaY,ThreeSigmaZ,ThreeSigmaXDot,ThreeSigmaYDot,ThreeSigmaZDot];
+            state_corrected(k,13) = delY(1);
+            state_corrected(k,13) = delY(2);
+        end
+    end
+    %Plot 3D Trace
+        figure()
+        hold on
+        axis equal
+        scatter3(state_corrected(:,1),state_corrected(:,2),state_corrected(:,3))
+        plot3(soln_prop_nom(:,1),soln_prop_nom(:,2),soln_prop_nom(:,3),LineWidth=2)
+        legend(["Corrected Prediction","Nominal Trajectory Propagation"])
+        title("3D Plot of Corrected Prediction Orbit.")
+        xlabel("X [km]")
+        ylabel("Y [km]")
+        zlabel("Z [km]")
+        grid on
+    %Plot 3 Sigma Stuff
+        X = (1:size(state_corrected,1));
+        figure()
+        sgtitle("Pure vs. Corrected Prediction 3-Sigma Bounds")
+        subplot(3,2,1)
+        hold on
+        plot(X,state_pure(:,7),"Color","blue")
+        plot(X,-state_pure(:,7),"Color","blue")
+        plot(X,state_corrected(:,7),"Color","red")
+        plot(X,-state_corrected(:,7),"Color","red")
+        grid on
+        ylim([-10000,10000])
+        ylabel("X Error Bounds [km]")
+        subplot(3,2,3)
+        hold on
+        plot(X,state_pure(:,8),"Color","blue")
+        plot(X,-state_pure(:,8),"Color","blue")
+        plot(X,state_corrected(:,8),"Color","red")
+        plot(X,-state_corrected(:,8),"Color","red")
+        grid on
+        ylim([-10000,10000])
+        ylabel("Y Error Bounds [km]")
+        subplot(3,2,5)
+        hold on
+        plot(X,state_pure(:,9),"Color","blue")
+        plot(X,-state_pure(:,9),"Color","blue")
+        plot(X,state_corrected(:,9),"Color","red")
+        plot(X,-state_corrected(:,9),"Color","red")
+        grid on
+        ylim([-10000,10000])
+        ylabel("Z Error Bounds [km]")
+        subplot(3,2,2)
+        hold on
+        plot(X,state_pure(:,10),"Color","blue")
+        plot(X,-state_pure(:,10),"Color","blue")
+        plot(X,state_corrected(:,10),"Color","red")
+        plot(X,-state_corrected(:,10),"Color","red")
+        legend(["+3 Sigma (Pre)","-3 Sigma (Pre)","+3 Sigma (Post)","-3 Sigma (Post)"])
+        grid on
+        ylim([-20,20])
+        ylabel("X' Error Bounds [km/s]")
+        subplot(3,2,4)
+        hold on
+        plot(X,state_pure(:,11),"Color","blue")
+        plot(X,-state_pure(:,11),"Color","blue")
+        plot(X,state_corrected(:,11),"Color","red")
+        plot(X,-state_corrected(:,11),"Color","red")
+        grid on
+        ylim([-20,20])
+        ylabel("Y' Error Bounds [km/s]")
+        subplot(3,2,6)
+        hold on
+        plot(X,state_pure(:,12),"Color","blue")
+        plot(X,-state_pure(:,12),"Color","blue")
+        plot(X,state_corrected(:,12),"Color","red")
+        plot(X,-state_corrected(:,12),"Color","red")
+        grid on
+        ylim([-20,20])
+        ylabel("Z' Error Bounds [km/s]")
+%Plot 3 Sigma Stuff Continued
+        X = (1:size(state_corrected,1));
+        figure()
+        sgtitle("Pre Minus Post Measurement State Variable")
+        subplot(3,2,1)
+        hold on
+        plot(X,state_pure(:,7),"Color","blue")
+        plot(X,-state_pure(:,7),"Color","blue")
+        plot(X,state_pure(:,1)-state_corrected(:,1),"Color","red")
+        ylim([-10000,10000])
+        grid on
+        ylabel("X [km]")
+        subplot(3,2,3)
+        hold on
+        plot(X,state_pure(:,8),"Color","blue")
+        plot(X,-state_pure(:,8),"Color","blue")
+        plot(X,state_pure(:,2)-state_corrected(:,2),"Color","red")
+        ylim([-10000,10000])
+        grid on
+        ylabel("Y [km]")
+        subplot(3,2,5)
+        hold on
+        plot(X,state_pure(:,9),"Color","blue")
+        plot(X,-state_pure(:,9),"Color","blue")
+        plot(X,state_pure(:,3)-state_corrected(:,3),"Color","red")
+        ylim([-10000,10000])
+        grid on
+        ylabel("Z [km]")
+        subplot(3,2,2)
+        hold on
+        plot(X,state_pure(:,10),"Color","blue")
+        plot(X,-state_pure(:,10),"Color","blue")
+        plot(X,state_pure(:,4)-state_corrected(:,4),"Color","red")
+        legend(["+3-Sigma Bounds (Pre)","-3-Sigma Bounds (Pre)","Pre-Post SV"])
+        grid on
+        ylabel("X' [km/s]")
+        ylim([-20,20])
+        subplot(3,2,4)
+        hold on
+        plot(X,state_pure(:,11),"Color","blue")
+        plot(X,-state_pure(:,11),"Color","blue")
+        plot(X,state_pure(:,5)-state_corrected(:,5),"Color","red")
+        grid on
+        ylabel("Y' [km/s]")
+        ylim([-20,20])
+        subplot(3,2,6)
+        hold on
+        plot(X,state_pure(:,12),"Color","blue")
+        plot(X,-state_pure(:,12),"Color","blue")
+        plot(X,state_pure(:,6)-state_corrected(:,6),"Color","red")
+        grid on
+        ylabel("Z' [km/s]")
+        ylim([-20,20])
+%Plot Residuals
+        figure()
+        sgtitle("Measurement Residuals")
+        subplot(2,1,1)
+        plot(X,state_corrected(:,13),"Color","blue")
+        ylabel("Range Residuals (km)")
+        grid on
+        xlim([0,size(X,2)])
+        subplot(2,1,2)
+        plot(X,state_corrected(:,14),"Color","blue")
+        ylabel("Range Rate Residuals (km/s)")
+        xlim([0,size(X,2)])
+        grid on
+%Plot Estimated State and 3 Sigma Bounds
+        X = (1:size(state_corrected,1));
+        figure()
+        sgtitle("Post-Correction Measurement State Variable")
+        subplot(3,2,1)
+        hold on
+        plot(X,state_corrected(:,7),"Color","blue")
+        plot(X,-state_corrected(:,7),"Color","blue")
+        plot(X,state_corrected(:,1),"Color","red")
+        ylim([-10000,10000])
+        grid on
+        ylabel("X [km]")
+        subplot(3,2,3)
+        hold on
+        plot(X,state_corrected(:,8),"Color","blue")
+        plot(X,-state_corrected(:,8),"Color","blue")
+        plot(X,state_corrected(:,2),"Color","red")
+        ylim([-10000,10000])
+        grid on
+        ylabel("Y [km]")
+        subplot(3,2,5)
+        hold on
+        plot(X,state_corrected(:,9),"Color","blue")
+        plot(X,-state_corrected(:,9),"Color","blue")
+        plot(X,state_corrected(:,3),"Color","red")
+        ylim([-10000,10000])
+        grid on
+        ylabel("Z [km]")
+        subplot(3,2,2)
+        hold on
+        plot(X,state_corrected(:,10),"Color","blue")
+        plot(X,-state_corrected(:,10),"Color","blue")
+        plot(X,state_corrected(:,4),"Color","red")
+        legend(["+3-Sigma Bounds (Post)","-3-Sigma Bounds (Post)","Post Correction SV"])
+        grid on
+        ylabel("X' [km/s]")
+        ylim([-20,20])
+        subplot(3,2,4)
+        hold on
+        plot(X,state_corrected(:,11),"Color","blue")
+        plot(X,-state_corrected(:,11),"Color","blue")
+        plot(X,state_corrected(:,5),"Color","red")
+        grid on
+        ylabel("Y' [km/s]")
+        ylim([-20,20])
+        subplot(3,2,6)
+        hold on
+        plot(X,state_corrected(:,12),"Color","blue")
+        plot(X,-state_corrected(:,12),"Color","blue")
+        plot(X,state_corrected(:,6),"Color","red")
+        grid on
+        ylabel("Z' [km/s]")
+        ylim([-20,20])
+%Final State and Uncertainty
+    disp("Final State Vector: ")
+    disp(real(state_corrected(end-1,:)))
+    disp("Final P_Matrix: ")
+    disp(P_kplus)
 %Project Addendum: Helper Functions
 
 function [X_out, F] = propagate_state(X_in, delta_t, mu)
