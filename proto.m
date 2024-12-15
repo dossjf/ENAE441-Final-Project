@@ -54,28 +54,72 @@
 
 %Project Step 1: - Problem Setup
     %a.) Express the non-linear system in continous time SS form.
-        syms x(t) y(t) z(t) x_s(t) y_s(t) z_s(t) t mu delta_t
-        X_bar = [x(t),y(t),z(t),diff(x,t),diff(y,t),diff(z,t)];
-        r_mag = sqrt(x^2+y^2+z^2);
-        x_ddot = -mu*x/r_mag^3;
-        y_ddot = -mu*y/r_mag^3;
-        z_ddot = -mu*z/r_mag^3;
-        f = [diff(x,t),diff(y,t),diff(z,t),x_ddot,y_ddot,z_ddot];
-        rho = sqrt((x-x_s)^2+(y-y_s)^2+(z-z_s)^2);
-        rho_dot = diff(rho,t);
-        h = [rho, rho_dot];
     %b.) Convert to discrete time form.
-        A = jacobian(f,X_bar);
-        C = jacobian(h,X_bar);
-        F = eye(6,6)+delta_t*A;
-        H = C; %Does not need to be discretized.
     %c.) Modify to include stochasticity.
-        VarRho = 10^-6; %km^2
-        VarRhoDot = 10^-10; %km^2/s^2
-        Q_0 = zeros(6,6); %Assuming No Process Noise...
-        R_0 = [VarRho,0;0,VarRhoDot]./delta_t;
+    %d.) Plot the measurements as a function of time.
+    figure()
+    subplot(2,1,1)
+    plot(data(:,1),data(:,3),"LineWidth",2);
+    title("Measurements vs Time")
+    xlabel("Time (s)")
+    ylabel("Range (km)")
+    subplot(2,1,2)
+    plot(data(:,1),data(:,4),"LineWidth",2);
+    xlabel("Time (s)")
+    ylabel("Range Rate (km/s)")
+
+    delta_t_var = 7;
+    x_0 = [r_nom;v_nom];
+    X_site = [R_site(1,:)';R_dot_site(1,:)'];
+    [y,H] = measurement_function(x_0,X_site);
+    [X_out,F] = propagate_state(x_0,delta_t_var,mu);
+
+%EKF Implementation:
+
 %Project Addendum: Helper Functions
 
+function [X_out, F] = propagate_state(X_in, delta_t, mu)
+    t_step = 1; %This is the single biggest determinent on how long the kalman filter takes to run. Start with 1 second.
+    r = X_in(1:3);
+    v = X_in(4:6);
+    r_mag = norm(r);
+    [t,X_out_unprocessed] = propOrbit(r,v,delta_t,t_step);
+    X_out = X_out_unprocessed(end,:)';
+
+    x = r(1);
+    y = r(2);
+    z = r(3);
+    F_ODTerms = (3*mu)/(r_mag^5); %Multiply by relevant x,y terms.
+    F_DTerms_X = (-mu/(r_mag^3)) + (3*mu*x^2)/(r_mag^5);
+    F_DTerms_Y = (-mu/(r_mag^3)) + (3*mu*y^2)/(r_mag^5);
+    F_DTerms_Z = (-mu/(r_mag^3)) + (3*mu*z^2)/(r_mag^5);
+    FLowerMatrix = [F_DTerms_X, F_ODTerms*x*y, F_ODTerms*x*z;
+                    F_ODTerms*x*y, F_DTerms_Y, F_ODTerms*y*z;
+                    F_ODTerms*x*z, F_ODTerms*y*z, F_DTerms_Z];
+    A = [zeros(3,3),eye(3,3);FLowerMatrix,zeros(3,3)];
+    F = (eye(6,6)+A*delta_t);
+end
+
+function [y,H] = measurement_function(X_SC,X_site)
+    r = X_SC(1:3);
+    v = X_SC(4:6);
+    r_site = X_site(1:3);
+    v_site = X_site(4:6);
+    rho_vec = r-r_site;
+    rho_mag = norm(rho_vec);
+    rho_dot = dot(rho_vec,(v-v_site))/rho_mag;
+    y = [rho_mag;rho_dot];
+
+    delRhodelX = (r(1)-r_site(1))/rho_mag;
+    delRhodelY = (r(2)-r_site(2))/rho_mag;
+    delRhodelZ = (r(3)-r_site(3))/rho_mag;
+    NumProd = (v(1)-v_site(1))*(r(1)-r_site(1))+(v(2)-v_site(2))*(r(2)-r_site(2))+(v(3)-v_site(3))*(r(3)-r_site(3));
+    delRhoDotdelX = delRhodelX - ((r(1)-r_site(1))*(NumProd))/(2*rho_mag^3);
+    delRhoDotdelY = delRhodelY - ((r(2)-r_site(2))*(NumProd))/(2*rho_mag^3);
+    delRhoDotdelZ = delRhodelZ - ((r(3)-r_site(3))*(NumProd))/(2*rho_mag^3);
+    H = [delRhodelX delRhodelY delRhodelZ 0 0 0;
+         delRhoDotdelX delRhoDotdelY delRhoDotdelZ delRhodelX delRhodelY delRhodelZ];
+end
 function drdt = propagate_2BP(t,r) %Orbital Dynamics Diff-EQ Function
     mu = 398600.4418; %km^3/s^2 - Earth Gravitational Parameter.
     drdt = zeros(6, 1);
