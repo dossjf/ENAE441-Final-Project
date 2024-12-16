@@ -105,7 +105,7 @@ def propagate_state(X_in, delta_t, mu):
                   [FLowerMatrix,    np.zeros((3,3))]])
     F = (np.eye(6) + A*delta_t)
     return X_out, F
-
+'''
 def measurement_function(X_SC, X_site):
     r = X_SC[0:3]
     v = X_SC[3:6]
@@ -128,6 +128,53 @@ def measurement_function(X_SC, X_site):
     H = np.array([[delRhodelX, delRhodelY, delRhodelZ, 0, 0, 0],
                   [delRhoDotdelX, delRhoDotdelY, delRhoDotdelZ, delRhodelX, delRhodelY, delRhodelZ]])
     return y, H
+    '''
+def measurement_function(X_SC, X_site):
+    r = X_SC[0:3]
+    v = X_SC[3:6]
+    r_site = X_site[0:3]
+    v_site = X_site[3:6]
+
+    Delta_r = r - r_site
+    Delta_v = v - v_site
+    rho = np.linalg.norm(Delta_r) # range
+    N = np.dot(Delta_r, Delta_v) # numerator for range-rate
+
+    # Measurements
+    # range rho = ||r - r_site||
+    # range rate rho_dot = (Delta_r · Delta_v) / rho
+    rho_dot = N / rho
+    y = np.array([rho, rho_dot])
+
+    # Partial derivatives of range w.r.t. position
+    delRhodelX = Delta_r[0] / rho
+    delRhodelY = Delta_r[1] / rho
+    delRhodelZ = Delta_r[2] / rho
+
+    # Partial derivatives of range w.r.t. velocity are zero
+    delRhodelVx = 0.0
+    delRhodelVy = 0.0
+    delRhodelVz = 0.0
+
+    # Partial derivatives of range-rate:
+    # d(rho_dot)/dx = (Delta_vx / rho) - (N * Delta_rx / rho^3)
+    delRhoDotdelX = (Delta_v[0] / rho) - ((N * Delta_r[0]) / rho**3)
+    delRhoDotdelY = (Delta_v[1] / rho) - ((N * Delta_r[1]) / rho**3)
+    delRhoDotdelZ = (Delta_v[2] / rho) - ((N * Delta_r[2]) / rho**3)
+
+    # Partial derivatives of range-rate w.r.t. velocity:
+    # d(rho_dot)/dvx = Delta_rx / rho
+    # d(rho_dot)/dvy = Delta_ry / rho
+    # d(rho_dot)/dvz = Delta_rz / rho
+    delRhoDotdelVx = Delta_r[0] / rho
+    delRhoDotdelVy = Delta_r[1] / rho
+    delRhoDotdelVz = Delta_r[2] / rho
+
+    # Jacobian H
+    H = np.array([
+        [delRhodelX,     delRhodelY,     delRhodelZ,     delRhodelVx,    delRhodelVy,    delRhodelVz],
+        [delRhoDotdelX,  delRhoDotdelY,  delRhoDotdelZ,  delRhoDotdelVx, delRhoDotdelVy, delRhoDotdelVz]
+    ])
 
 if __name__ == "__main__":
     #Project Step 0a: - Defining Initial Values and Givens
