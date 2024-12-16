@@ -58,8 +58,8 @@ def OE2Cart(input_oe, mu): #Converts Orbital Elements to Cartesian Coordinates i
 
 def RSite2ECI(lat, long, delta_t, gamma_0, w_e_n, r_earth): #Converts site position to ECI state-vec at a given T past 0.
     gamma = gamma_0 + w_e_n*delta_t
-    ECI2ECEF = np.array([[np.cos(gamma), np.sin(gamma), 0],
-                         [-np.sin(gamma), np.cos(gamma),0],
+    ECI2ECEF = np.array([[np.cos(-gamma), np.sin(-gamma), 0],
+                         [-np.sin(-gamma), np.cos(-gamma),0],
                          [0,0,1]])
     ECEF2ECI = ECI2ECEF.T #Transposing the ECI2ECEF matrix to invert it.
 
@@ -73,13 +73,13 @@ def RSite2ECI(lat, long, delta_t, gamma_0, w_e_n, r_earth): #Converts site posit
                    [0,-np.sin(np.deg2rad(OneRot)), np.cos(np.deg2rad(OneRot))]])
     Tropo2ECEF = M3 @ M1
     ENU_r = np.array([0,0,r_earth]) #A position of 0,0,r_earth relative to the center of the earth is the site. 
-    ECEF_r = Tropo2ECEF @ ENU_r
-    r_out = ECEF2ECI @ ECEF_r
+    ECEF_r = Tropo2ECEF @ ENU_r.T
+    r_out = (ECEF2ECI @ ECEF_r).T
     VelEQ = w_e_n*r_earth #Tangential Velocity of the Earth at the Equator.
     VelSite = VelEQ*np.cos(np.deg2rad(lat)) #Tangential Velocity of the site. Km/s;
     ENU_v = np.array([VelSite,0,0]) #Earth's rotational velocity is only eastward.
-    ECEF_v = Tropo2ECEF @ ENU_v
-    v_out = ECEF2ECI @ ECEF_v
+    ECEF_v = Tropo2ECEF @ ENU_v.T
+    v_out = (ECEF2ECI @ ECEF_v).T
     return r_out, v_out
 
 def propagate_state(X_in, delta_t, mu):
@@ -247,28 +247,28 @@ if __name__ == "__main__":
     plt.savefig("PurePredOrbit.png")
 
     #Plot 3 Sigma Stuff
-    X = np.arange(state_pure.shape[0]) + 1
-    fig4, axs4 = plt.subplots(3,2)
-    fig4.suptitle("Pure Prediction 3-Sigma Bounds")
-    labels = ["X","Y","Z","X'","Y'","Z'"]
-    for i in range(3):
-        axs4[i,0].plot(X,state_pure[:,6+i],"b")
-        axs4[i,0].plot(X,-state_pure[:,6+i],"b")
-        axs4[i,0].grid(True)
-        axs4[i,0].set_ylabel(f"{labels[i]} Error Bounds [km]")
-
-    for i in range(3):
-        axs4[i,1].plot(X,state_pure[:,9+i],"b")
-        axs4[i,1].plot(X,-state_pure[:,9+i],"b")
-        axs4[i,1].grid(True)
-        if i == 0:
-            axs4[i,1].set_ylabel("X' Error Bounds [km/s]")
-        elif i == 1:
-            axs4[i,1].set_ylabel("Y' Error Bounds [km/s]")
-        else:
-            axs4[i,1].set_ylabel("Z' Error Bounds [km/s]")
+    X = np.arange(1, state_pure.shape[0] + 1)
+    fig, axs = plt.subplots(3, 2, figsize=(10, 8))
+    fig.suptitle("Pure Prediction 3-Sigma Bounds")
+    axs[0, 0].fill_between(X, state_pure[:, 6], -state_pure[:, 6], color="blue", alpha=0.3)
+    axs[0, 0].grid(True)
+    axs[0, 0].set_ylabel("X Error Bounds [km]")
+    axs[1, 0].fill_between(X, state_pure[:, 7], -state_pure[:, 7], color="blue", alpha=0.3)
+    axs[1, 0].grid(True)
+    axs[1, 0].set_ylabel("Y Error Bounds [km]")
+    axs[2, 0].fill_between(X, state_pure[:, 8], -state_pure[:, 8], color="blue", alpha=0.3)
+    axs[2, 0].grid(True)
+    axs[2, 0].set_ylabel("Z Error Bounds [km]")
+    axs[0, 1].fill_between(X, state_pure[:, 9], -state_pure[:, 9], color="blue", alpha=0.3)
+    axs[0, 1].grid(True)
+    axs[0, 1].set_ylabel("X' Error Bounds [km/s]")
+    axs[1, 1].fill_between(X, state_pure[:, 10], -state_pure[:, 10], color="blue", alpha=0.3)
+    axs[1, 1].grid(True)
+    axs[1, 1].set_ylabel("Y' Error Bounds [km/s]")
+    axs[2, 1].fill_between(X, state_pure[:, 11], -state_pure[:, 11], color="blue", alpha=0.3)
+    axs[2, 1].grid(True)
+    axs[2, 1].set_ylabel("Z' Error Bounds [km/s]")    
     plt.savefig("PurePredThreeSigma.png")
-
     #EKF (Corrected Prediction) Implementation:
     #Initialize
     VarRng = 10**-6 #Range Variance - km^2
