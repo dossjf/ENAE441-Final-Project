@@ -105,30 +105,6 @@ def propagate_state(X_in, delta_t, mu):
                   [FLowerMatrix,    np.zeros((3,3))]])
     F = (np.eye(6) + A*delta_t)
     return X_out, F
-'''
-def measurement_function(X_SC, X_site):
-    r = X_SC[0:3]
-    v = X_SC[3:6]
-    r_site = X_site[0:3]
-    v_site = X_site[3:6]
-
-    rho_vec = r - r_site
-    rho_mag = np.linalg.norm(rho_vec)
-    rho_dot = np.dot(rho_vec,(v - v_site))/rho_mag
-    y = np.array([rho_mag, rho_dot])
-
-    delRhodelX = (2*r[0] - 2*r_site[0])/(2*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(1/2))
-    delRhodelY = (2*r[1] - 2*r_site[1])/(2*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(1/2))
-    delRhodelZ = (2*r[2] - 2*r_site[2])/(2*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(1/2))
-
-    delRhoDotdelX = (2*v[0] - 2*v_site[0])/(2*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(1/2)) - ((2*r[0] - 2*r_site[0])*(2*(v[0] - v_site[0])*(r[0] - r_site[0]) + 2*(v[1] - v_site[1])*(r[1] - r_site[1]) + 2*(v[2] - v_site[2])*(r[2] - r_site[2])))/(4*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(3/2))
-    delRhoDotdelY = (2*v[1] - 2*v_site[1])/(2*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(1/2)) - ((2*r[1] - 2*r_site[1])*(2*(v[0] - v_site[0])*(r[0] - r_site[0]) + 2*(v[1] - v_site[1])*(r[1] - r_site[1]) + 2*(v[2] - v_site[2])*(r[2] - r_site[2])))/(4*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(3/2))
-    delRhoDotdelZ = (2*v[2] - 2*v_site[2])/(2*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(1/2)) - ((2*r[2] - 2*r_site[2])*(2*(v[0] - v_site[0])*(r[0] - r_site[0]) + 2*(v[1] - v_site[1])*(r[1] - r_site[1]) + 2*(v[2] - v_site[2])*(r[2] - r_site[2])))/(4*((r[0] - r_site[0])**2 + (r[1] - r_site[1])**2 + (r[2] - r_site[2])**2)**(3/2))
-
-    H = np.array([[delRhodelX, delRhodelY, delRhodelZ, 0, 0, 0],
-                  [delRhoDotdelX, delRhoDotdelY, delRhoDotdelZ, delRhodelX, delRhodelY, delRhodelZ]])
-    return y, H
-    '''
 def measurement_function(X_SC, X_site):
     r = X_SC[0:3]
     v = X_SC[3:6]
@@ -175,6 +151,7 @@ def measurement_function(X_SC, X_site):
         [delRhodelX,     delRhodelY,     delRhodelZ,     delRhodelVx,    delRhodelVy,    delRhodelVz],
         [delRhoDotdelX,  delRhoDotdelY,  delRhoDotdelZ,  delRhoDotdelVx, delRhoDotdelVy, delRhoDotdelVz]
     ])
+    return y,H
 
 if __name__ == "__main__":
     #Project Step 0a: - Defining Initial Values and Givens
