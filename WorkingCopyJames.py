@@ -12,15 +12,13 @@ def propagate_2BP(t, r):
     drdt[3:6] = (-mu / r_mag**3) * r[0:3]
     return drdt
 
-def propOrbit(r, v, delta_t, t_step): #Propagates ECI Coordinates using Numerical Tools
+def propOrbit(r, v, t_final, t_step, t_curr): #Propagates ECI Coordinates using Numerical Tools
     inputs_OBT = np.concatenate((r, v))
-    t_eval = np.arange(0, delta_t, t_step)
-    if t_eval[-1] < delta_t:
-        t_eval = np.append(t_eval, delta_t)
-    
-    sol = solve_ivp(propagate_2BP, [0, delta_t], inputs_OBT, t_eval=t_eval, 
+    t_eval = np.arange(t_curr, t_final, t_step)
+    sol = solve_ivp(propagate_2BP, [t_curr, t_final], inputs_OBT, t_eval=t_eval, 
                     rtol=1e-13, atol=1e-13) #Change parameter to change propgator tolerance.
-    soln = sol.y.T
+    solnUT = sol.y
+    soln = np.transpose(solnUT)
     t = sol.t
     return t, soln
 
@@ -82,13 +80,13 @@ def RSite2ECI(lat, long, delta_t, gamma_0, w_e_n, r_earth): #Converts site posit
     v_out = (ECEF2ECI @ ECEF_v).T
     return r_out, v_out
 
-def propagate_state(X_in, delta_t, mu):
+def propagate_state(X_in, t_final, t_curr, mu):
     t_step = 1 #This is the single biggest determinent on how long the kalman filter takes to run. Start with 1 second.
     r = X_in[0:3]
     v = X_in[3:6]
     r_mag = np.linalg.norm(r)
     # Propagate orbit
-    t, X_out_unprocessed = propOrbit(r, v, delta_t, t_step)
+    t, X_out_unprocessed = propOrbit(r, v, t_final, t_step, t_curr)
     X_out = X_out_unprocessed[-1,:]
 
     x = r[0]
@@ -103,8 +101,10 @@ def propagate_state(X_in, delta_t, mu):
                              [F_ODTerms*x*z, F_ODTerms*y*z, F_DTerms_Z]])
     A = np.block([[np.zeros((3,3)), np.eye(3)],
                   [FLowerMatrix,    np.zeros((3,3))]])
+    delta_t = t_final-t_curr
     F = (np.eye(6) + A*delta_t)
     return X_out, F
+
 def measurement_function(X_SC, X_site):
     r = X_SC[0:3]
     v = X_SC[3:6]
@@ -160,7 +160,22 @@ if __name__ == "__main__":
     filename = 'Project-Measurements-Easy.npy'  #Note, this expects the measurements file to be in the same rootdir as this .py file.
     file_path = os.path.join(current_directory, filename)
     data = np.load(file_path, allow_pickle=True)
-
+    #Converting the discontinous time data into continous time.
+    tStep = data[1, 0]
+    t_f = data[-1, 0]
+    time_steps = np.arange(0, t_f + tStep, tStep)
+    dataReformatted = np.zeros((len(time_steps), 4))
+    dataReformatted[:, 0] = time_steps
+    k = 0
+    for i in range(dataReformatted.shape[0]):
+        if abs(data[k, 0] - dataReformatted[i, 0]) < 0.1:
+            dataReformatted[i, :] = data[k, :]
+            k += 1
+        else:
+            dataReformatted[i, 1] = -1
+            dataReformatted[i, 2] = np.nan
+            dataReformatted[i, 3] = np.nan
+    data = dataReformatted
     #Defining location of sites: formatted [lat,long]
     SiteCoordinates = np.array([[35.297, -116.914],
                                 [40.4311, -4.248],
@@ -172,6 +187,8 @@ if __name__ == "__main__":
     mu = 398600.4418 #km^3/s^2 - Earth Gravitational Parameter.
     r_earth = 6378.137 #km - Radius of Earth.
     PositionalErrors = 10**3 #The Positional 
+    P_PosVar = 10**3 #Position Error Variance, Std. Dev - 100 km
+    P_VelVar = 0.01 #Velocity Error Variance, Std. Dev - 100 m/s.
 
     #Defining nominal orbit parameters...
     a_nom = 7000 #km - Semi-Major Axis of Nominal Orbit.
@@ -184,12 +201,12 @@ if __name__ == "__main__":
 
     #Project Step 0b: - Inspecting the Trajectory of the Nominal Orbit
     #Convert OEs to Cartesian ECI State Vector...
-    delta_t = 2*np.pi*np.sqrt(a_nom**3/mu) #Propagate nominal trajectory for one orbit.
-    t_step = 0.1
+    t_final = 2*np.pi*np.sqrt(a_nom**3/mu) #Propagate nominal trajectory for one orbit.
+    t_step = 1
     r_nom, v_nom = OE2Cart(OE_Nom, mu)
 
     #Propagate and Display Reference Orbit...
-    t_prop_nom, soln_prop_nom = propOrbit(r_nom, v_nom, delta_t, t_step)
+    t_prop_nom, soln_prop_nom = propOrbit(r_nom, v_nom, t_final, t_step,0)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.plot(soln_prop_nom[:,0], soln_prop_nom[:,1], soln_prop_nom[:,2], linewidth=2)
@@ -206,12 +223,16 @@ if __name__ == "__main__":
     R_dot_site = np.zeros((data.shape[0],3))
     for i in range(data.shape[0]):
         siteIndex = int(data[i,1])
-        siteLat = SiteCoordinates[siteIndex, 0]
-        siteLong = SiteCoordinates[siteIndex, 1]
-        delta_t = data[i,0]
-        r_site, v_site = RSite2ECI(siteLat, siteLong, delta_t, gamma_0, w_e_n, r_earth)
-        R_site[i,:] = r_site
-        R_dot_site[i,:] = v_site
+        if(siteIndex != np.nan):
+            siteLat = SiteCoordinates[siteIndex, 0]
+            siteLong = SiteCoordinates[siteIndex, 1]
+            delta_t = data[i,0]
+            r_site, v_site = RSite2ECI(siteLat, siteLong, delta_t, gamma_0, w_e_n, r_earth)
+            R_site[i,:] = r_site
+            R_dot_site[i,:] = v_site
+        else:
+            R_site[i,:] = np.nan
+            R_dot_site[i,:] = np.nan
     #Project Step 1: - Problem Setup
     #d.) Plot the measurements as a function of time.
     fig2, (ax1, ax2) = plt.subplots(2,1,sharex=True)
@@ -232,28 +253,28 @@ if __name__ == "__main__":
     x_kplus = np.concatenate((r_nom,v_nom)) #x_kplus = x_0;
     Q_k = np.zeros((6,6)) #Define Q_0
     R_k = np.array([[VarRng,0],[0,VarRngRate]]) #Define R_0
-    P_kplus = np.block([[np.eye(3)*VarRng, np.zeros((3,3))],
-                        [np.zeros((3,3)), np.eye(3)*VarRngRate]]) #Define P_0
+    P_kplus = np.block([[np.eye(3)*P_PosVar, np.zeros((3,3))],
+                        [np.zeros((3,3)), np.eye(3)*P_VelVar]]) #Define P_0
     #Create Storage
     state_pure = np.zeros((data.shape[0],12)) #Formatted [X,Y,Z,X',Y',Z',3sigmaX,3sigmaY,3sigmaZ,3sigmaX',3sigmaY',3sigmaZ']
     for k in range(data.shape[0]):
-        if k != data.shape[0]-1:
-            #Find Delta_T
-            delta_tk = data[k+1,0]-data[k,0]
-            #Predict
-            x_kplus_minus, F_k = propagate_state(x_kplus, delta_tk, mu)
-            P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
-            P_kplus = P_kplus_minus
-            x_kplus = x_kplus_minus
-            #Store
-            state_pure[k,0:6] = x_kplus
-            ThreeSigmaX = np.sqrt(P_kplus[0,0])*3
-            ThreeSigmaY = np.sqrt(P_kplus[1,1])*3
-            ThreeSigmaZ = np.sqrt(P_kplus[2,2])*3
-            ThreeSigmaXDot = np.sqrt(P_kplus[3,3])*3
-            ThreeSigmaYDot = np.sqrt(P_kplus[4,4])*3
-            ThreeSigmaZDot = np.sqrt(P_kplus[5,5])*3
-            state_pure[k,6:12] = [ThreeSigmaX,ThreeSigmaY,ThreeSigmaZ,ThreeSigmaXDot,ThreeSigmaYDot,ThreeSigmaZDot]
+        delta_tk = data[1,0]
+        t_curr = data[k,0]
+        t_final = t_curr+delta_tk
+        #Predict
+        x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
+        P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
+        P_kplus = P_kplus_minus
+        x_kplus = x_kplus_minus
+        #Store
+        state_pure[k,0:6] = x_kplus
+        ThreeSigmaX = np.sqrt(P_kplus[0,0])*3
+        ThreeSigmaY = np.sqrt(P_kplus[1,1])*3
+        ThreeSigmaZ = np.sqrt(P_kplus[2,2])*3
+        ThreeSigmaXDot = np.sqrt(P_kplus[3,3])*3
+        ThreeSigmaYDot = np.sqrt(P_kplus[4,4])*3
+        ThreeSigmaZDot = np.sqrt(P_kplus[5,5])*3
+        state_pure[k,6:12] = [ThreeSigmaX,ThreeSigmaY,ThreeSigmaZ,ThreeSigmaXDot,ThreeSigmaYDot,ThreeSigmaZDot]
     #Plot 3D Trace
     fig3 = plt.figure()
     ax3 = fig3.add_subplot(111, projection='3d')
@@ -297,17 +318,20 @@ if __name__ == "__main__":
     x_kplus = np.concatenate((r_nom,v_nom)) #x_kplus = x_0;
     Q_k = np.zeros((6,6)) #Define Q_0
     R_k = np.array([[VarRng,0],[0,VarRngRate]]) #Define R_0
-    P_kplus = np.block([[np.eye(3)*VarRng, np.zeros((3,3))],
-                        [np.zeros((3,3)), np.eye(3)*VarRngRate]]) #Define P_0
+    P_kplus = np.block([[np.eye(3)*P_PosVar, np.zeros((3,3))],
+                        [np.zeros((3,3)), np.eye(3)*P_VelVar]]) #Define P_0
     #Create Storage
     state_corrected = np.zeros((data.shape[0],14)) #Same format as before but the last two columns are for range and range rate residuals respectively.
     for k in range(data.shape[0]):
-        if k != data.shape[0]-1:
-            #Find Delta_T
-            delta_tk = data[k+1,0]-data[k,0]
-            #Predict
-            x_kplus_minus, F_k = propagate_state(x_kplus, delta_tk, mu)
-            P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
+        delta_tk = data[1,0]
+        t_curr = data[k,0]
+        t_final = t_curr+delta_tk
+        #Predict
+        x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
+        P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
+        P_kplus = P_kplus_minus
+        x_kplus = x_kplus_minus
+        if(data[k,1] != -1):
             #Correct
             y_k_meas = data[k,2:4] # range, range rate
             X_site = np.concatenate((R_site[k,:], R_dot_site[k,:]))
@@ -316,17 +340,17 @@ if __name__ == "__main__":
             K_k = P_kplus_minus @ H.T @ np.linalg.pinv(H @ P_kplus_minus @ H.T + R_k)
             x_kplus = x_kplus_minus + K_k @ delY
             P_kplus = (np.eye(6)-K_k@H)@P_kplus_minus
-            #Store
-            state_corrected[k,0:6] = x_kplus
-            ThreeSigmaX = np.sqrt(P_kplus[0,0])*3
-            ThreeSigmaY = np.sqrt(P_kplus[1,1])*3
-            ThreeSigmaZ = np.sqrt(P_kplus[2,2])*3
-            ThreeSigmaXDot = np.sqrt(P_kplus[3,3])*3
-            ThreeSigmaYDot = np.sqrt(P_kplus[4,4])*3
-            ThreeSigmaZDot = np.sqrt(P_kplus[5,5])*3
-            state_corrected[k,6:12] = [ThreeSigmaX,ThreeSigmaY,ThreeSigmaZ,ThreeSigmaXDot,ThreeSigmaYDot,ThreeSigmaZDot]
-            state_corrected[k,12] = delY[0]
-            state_corrected[k,13] = delY[1]
+        #Store
+        state_corrected[k,0:6] = x_kplus
+        ThreeSigmaX = np.sqrt(P_kplus[0,0])*3
+        ThreeSigmaY = np.sqrt(P_kplus[1,1])*3
+        ThreeSigmaZ = np.sqrt(P_kplus[2,2])*3
+        ThreeSigmaXDot = np.sqrt(P_kplus[3,3])*3
+        ThreeSigmaYDot = np.sqrt(P_kplus[4,4])*3
+        ThreeSigmaZDot = np.sqrt(P_kplus[5,5])*3
+        state_corrected[k,6:12] = [ThreeSigmaX,ThreeSigmaY,ThreeSigmaZ,ThreeSigmaXDot,ThreeSigmaYDot,ThreeSigmaZDot]
+        state_corrected[k,12] = delY[0]
+        state_corrected[k,13] = delY[1]
     #Plot 3D Trace
     fig5 = plt.figure()
     ax5 = fig5.add_subplot(111, projection='3d')
