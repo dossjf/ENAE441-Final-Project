@@ -176,6 +176,9 @@ if __name__ == "__main__":
             dataReformatted[i, 2] = np.nan
             dataReformatted[i, 3] = np.nan
     data = dataReformatted
+
+    data = data[:134, :] ######################################################################### Sections some of the data for debugging. Delete later!
+
     #Defining location of sites: formatted [lat,long]
     SiteCoordinates = np.array([[35.297, -116.914],
                                 [40.4311, -4.248],
@@ -187,8 +190,9 @@ if __name__ == "__main__":
     mu = 398600.4418 #km^3/s^2 - Earth Gravitational Parameter.
     r_earth = 6378.137 #km - Radius of Earth.
     PositionalErrors = 10**3 #The Positional 
-    P_PosVar = 10**3 #Position Error Variance, Std. Dev - 100 km
-    P_VelVar = 0.01 #Velocity Error Variance, Std. Dev - 100 m/s.
+    P_PosVar = 10**2 #Position Error Variance, Std. Dev - 100 km
+    P_VelVar = 0.01**2 #Velocity Error Variance, Std. Dev - 100 m/s.
+    P_AccVar = 0.00001**2 #Acceleration Error Variance, Std. Dev - 0.1 m/s^2
 
     #Defining nominal orbit parameters...
     a_nom = 7000 #km - Semi-Major Axis of Nominal Orbit.
@@ -251,7 +255,6 @@ if __name__ == "__main__":
     VarRng = 10**-6 #Range Variance - km^2
     VarRngRate = 10**-10 #Range Rate Variance - km^2/s^2
     x_kplus = np.concatenate((r_nom,v_nom)) #x_kplus = x_0;
-    Q_k = np.zeros((6,6)) #Define Q_0
     R_k = np.array([[VarRng,0],[0,VarRngRate]]) #Define R_0
     P_kplus = np.block([[np.eye(3)*P_PosVar, np.zeros((3,3))],
                         [np.zeros((3,3)), np.eye(3)*P_VelVar]]) #Define P_0
@@ -263,6 +266,8 @@ if __name__ == "__main__":
         t_final = t_curr+delta_tk
         #Predict
         x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
+        Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],
+                        [np.zeros((3,3)), np.eye(3)*P_VelVar*delta_tk]])
         P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
         P_kplus = P_kplus_minus
         x_kplus = x_kplus_minus
@@ -316,7 +321,6 @@ if __name__ == "__main__":
     VarRng = 10**-6 #Range Variance - km^2
     VarRngRate = 10**-10 #Range Rate Variance - km^2/s^2
     x_kplus = np.concatenate((r_nom,v_nom)) #x_kplus = x_0;
-    Q_k = np.zeros((6,6)) #Define Q_0
     R_k = np.array([[VarRng,0],[0,VarRngRate]]) #Define R_0
     P_kplus = np.block([[np.eye(3)*P_PosVar, np.zeros((3,3))],
                         [np.zeros((3,3)), np.eye(3)*P_VelVar]]) #Define P_0
@@ -328,6 +332,9 @@ if __name__ == "__main__":
         t_final = t_curr+delta_tk
         #Predict
         x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
+        Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],[np.zeros((3,3)), np.eye(3)*P_VelVar*delta_tk]])
+        Q_k = np.zeros((6,6)) 
+
         P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
         P_kplus = P_kplus_minus
         x_kplus = x_kplus_minus
@@ -442,35 +449,35 @@ if __name__ == "__main__":
     X = np.arange(1, state_pure.shape[0] + 1)
     fig9, axs9 = plt.subplots(3, 2, figsize=(10, 8))
     fig9.suptitle("Post-Correction State Variable")
-    axs9[0, 0].fill_between(X, state_corrected[:, 6], -state_corrected[:, 6], color="blue", alpha=0.3)
+    axs9[0, 0].fill_between(X, state_corrected[:, 6]+state_corrected[:, 0], -state_corrected[:, 6]+state_corrected[:, 0], color="blue", alpha=0.3)
     axs9[0, 0].plot(X, state_corrected[:, 0], color="red", alpha=0.6,linewidth=2)
     axs9[0, 0].legend(["3-Sigma Bounds","Best Estimate SV"])
     axs9[0, 0].grid(True)
     axs9[0, 0].set_ylabel("X [km]")
-    axs9[1, 0].fill_between(X, state_corrected[:, 7], -state_corrected[:, 7], color="blue", alpha=0.3)
+    axs9[1, 0].fill_between(X, state_corrected[:, 7]+state_corrected[:, 1], -state_corrected[:, 7]+state_corrected[:, 1], color="blue", alpha=0.3)
     axs9[1, 0].plot(X, state_corrected[:, 1], color="red", alpha=0.6,linewidth=2)
     axs9[1, 0].grid(True)
     axs9[1, 0].set_ylabel("Y [km]")
-    axs9[2, 0].fill_between(X, state_corrected[:, 8], -state_corrected[:, 8], color="blue", alpha=0.3)
+    axs9[2, 0].fill_between(X, state_corrected[:, 8]+state_corrected[:, 2], -state_corrected[:, 8]+state_corrected[:, 2], color="blue", alpha=0.3)
     axs9[2, 0].plot(X, state_corrected[:, 2], color="red", alpha=0.6,linewidth=2)
     axs9[2, 0].grid(True)
     axs9[2, 0].set_ylabel("Z [km]")
-    axs9[0, 1].fill_between(X, state_corrected[:, 9], -state_corrected[:, 9], color="blue", alpha=0.3)
+    axs9[0, 1].fill_between(X, state_corrected[:, 9]+state_corrected[:, 3], -state_corrected[:, 9]+state_corrected[:, 3], color="blue", alpha=0.3)
     axs9[0, 1].plot(X, state_corrected[:, 3], color="red", alpha=0.6,linewidth=2)
     axs9[0, 1].grid(True)
     axs9[0, 1].set_ylabel("X' [km/s]")
-    axs9[1, 1].fill_between(X, state_corrected[:, 10], -state_corrected[:, 10], color="blue", alpha=0.3)
+    axs9[1, 1].fill_between(X, state_corrected[:, 10]+state_corrected[:, 4], -state_corrected[:, 10]+state_corrected[:, 4], color="blue", alpha=0.3)
     axs9[1, 1].plot(X, state_corrected[:, 4], color="red", alpha=0.6,linewidth=2)
     axs9[1, 1].grid(True)
     axs9[1, 1].set_ylabel("Y' [km/s]")
-    axs9[2, 1].fill_between(X, state_corrected[:, 11], -state_corrected[:, 11], color="blue", alpha=0.3)
+    axs9[2, 1].fill_between(X, state_corrected[:, 11]+state_corrected[:, 5], -state_corrected[:, 11]+state_corrected[:, 5], color="blue", alpha=0.3)
     axs9[2, 1].plot(X, state_corrected[:, 5], color="red", alpha=0.6,linewidth=2)
     axs9[2, 1].grid(True)
     axs9[2, 1].set_ylabel("Z' [km/s]")    
     plt.savefig("CorrectedSVs.png")
 
     print("Final State Vector: ")
-    print(np.real(state_corrected[-2,:]))
+    print(np.real(state_corrected[-1,0:6]))
     print("Final P_Matrix: ")
     print(P_kplus)
 
