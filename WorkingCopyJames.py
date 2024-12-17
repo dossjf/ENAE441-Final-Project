@@ -177,7 +177,7 @@ if __name__ == "__main__":
             dataReformatted[i, 3] = np.nan
     data = dataReformatted
 
-    #data = data[:134, :] ######################################################################### Sections some of the data for debugging. Delete later!
+    data = data[:134, :] ######################################################################### Sections some of the data for debugging. Delete later!
 
     #Defining location of sites: formatted [lat,long]
     SiteCoordinates = np.array([[35.297, -116.914],
@@ -332,9 +332,7 @@ if __name__ == "__main__":
         t_final = t_curr+delta_tk
         #Predict
         x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
-        Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],[np.zeros((3,3)), np.eye(3)*P_VelVar*delta_tk]])
-        Q_k = np.zeros((6,6)) 
-
+        Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],[np.zeros((3,3)), np.eye(3)*P_VelVar*delta_tk]]) 
         P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
         P_kplus = P_kplus_minus
         x_kplus = x_kplus_minus
@@ -480,5 +478,4 @@ if __name__ == "__main__":
     print(np.real(state_corrected[-1,0:6]))
     print("Final P_Matrix: ")
     print(P_kplus)
-
     plt.show()
