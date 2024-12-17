@@ -177,7 +177,7 @@ if __name__ == "__main__":
             dataReformatted[i, 3] = np.nan
     data = dataReformatted
 
-    data = data[:134, :] ######################################################################### Sections some of the data for debugging. Delete later!
+    #data = data[:134, :] ######################################################################### Sections some of the data for debugging. Delete later!
 
     #Defining location of sites: formatted [lat,long]
     SiteCoordinates = np.array([[35.297, -116.914],
