@@ -228,7 +228,7 @@ if __name__ == "__main__":
     R_dot_site = np.zeros((data.shape[0],3))
     for i in range(data.shape[0]):
         siteIndex = int(data[i,1])
-        if(siteIndex != np.nan):
+        if(siteIndex != -1):
             siteLat = SiteCoordinates[siteIndex, 0]
             siteLong = SiteCoordinates[siteIndex, 1]
             delta_t = data[i,0]
