@@ -189,10 +189,11 @@ if __name__ == "__main__":
     gamma_0 = 0  #rad - Local Sidereal Time.
     mu = 398600.4418 #km^3/s^2 - Earth Gravitational Parameter.
     r_earth = 6378.137 #km - Radius of Earth.
-    PositionalErrors = 10**3 #The Positional 
+
     P_PosVar = 10**2 #Position Error Variance, Std. Dev - 100 km
     P_VelVar = 0.01**2 #Velocity Error Variance, Std. Dev - 100 m/s.
     P_AccVar = 0.00001**2 #Acceleration Error Variance, Std. Dev - 0.1 m/s^2
+    P_AccVar = 0 ######################################################################### Sections some of the data for debugging. Delete later!
 
     #Defining nominal orbit parameters...
     a_nom = 7000 #km - Semi-Major Axis of Nominal Orbit.
@@ -267,7 +268,7 @@ if __name__ == "__main__":
         #Predict
         x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
         Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],
-                        [np.zeros((3,3)), np.eye(3)*P_VelVar*delta_tk]])
+                        [np.zeros((3,3)), np.eye(3)*P_AccVar*delta_tk]])*(delta_tk**2)
         P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
         P_kplus = P_kplus_minus
         x_kplus = x_kplus_minus
@@ -332,7 +333,8 @@ if __name__ == "__main__":
         t_final = t_curr+delta_tk
         #Predict
         x_kplus_minus, F_k = propagate_state(x_kplus, t_final, t_curr, mu)
-        Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],[np.zeros((3,3)), np.eye(3)*P_VelVar*delta_tk]]) 
+        Q_k = np.block([[np.eye(3)*P_AccVar*(delta_tk**2)/2, np.zeros((3,3))],
+                        [np.zeros((3,3)), np.eye(3)*P_AccVar*delta_tk]])*(delta_tk**2)
         P_kplus_minus = F_k @ P_kplus @ F_k.T + Q_k
         P_kplus = P_kplus_minus
         x_kplus = x_kplus_minus
