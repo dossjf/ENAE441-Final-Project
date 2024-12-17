@@ -2,5 +2,5 @@ Semi-functional python implementation of a range and range rate extended kalman 
 
 From James: A note about development - when I originally began working on the code for this project, I began by implementing the rough code as I had then drafted it in MATLAB. This is because Visual Studio Code and matplotlib do not properly work together on my machine and interactive plots do not function (with all plots instead needing to be saved locally). As such, proto.m made to allow me to zoom in on potentiall suspect plots and more easily diagnose issues with implementation before writing the bulk of the program in python.
 
-WorkingCopyJames.py is the Linearized ZOH Kalman Filter
+WorkingCopyJames.py is the old Linearized ZOH Kalman Filter around which the first report was written.
 EKF.py is the proper Extended Kalman Filter implementation, although it demonstrates suboptimal behavior at many times.
