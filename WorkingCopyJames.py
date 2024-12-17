@@ -190,9 +190,9 @@ if __name__ == "__main__":
     mu = 398600.4418 #km^3/s^2 - Earth Gravitational Parameter.
     r_earth = 6378.137 #km - Radius of Earth.
 
-    P_PosVar = 10**2 #Position Error Variance, Std. Dev - 100 km
-    P_VelVar = 0.01**2 #Velocity Error Variance, Std. Dev - 100 m/s.
-    P_AccVar = 0.00001**2 #Acceleration Error Variance, Std. Dev - 0.1 m/s^2
+    P_PosVar = 10**2 #Position Error Variance, Std. Dev - 10 km
+    P_VelVar = 0.01**2 #Velocity Error Variance, Std. Dev - 10 m/s.
+    P_AccVar = 0.00001**2 #Acceleration Error Variance, Std. Dev - 0.01 m/s^2
     P_AccVar = 0 ######################################################################### Sections some of the data for debugging. Delete later!
 
     #Defining nominal orbit parameters...
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     ax.set_title("Propagated Nominal Satellite Trajectory")
     ax.grid(True)
     plt.savefig("NominalOrbit.png")
-
+    
     #Project Step 0c: - Converting the Location of Ground Stations (Tropocentric to ECI)
     #Define ECI Position Array of Active Ground Station...
     R_site = np.zeros((data.shape[0],3)) #Columns are X,Y,Z ECI Coords of Active Site, each row corresponds to the corresponding active time in the data.
